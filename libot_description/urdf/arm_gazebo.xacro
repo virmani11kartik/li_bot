@@ -10,14 +10,9 @@
 
             <joint_name>horizontal_prismatic1_2_joint</joint_name>
             <joint_name>horizontal_prismatic2_3_joint</joint_name>
-        </plugin>
-    </gazebo>
 
-    <gazebo>
-        <plugin
-            filename="gz-sim-joint-controller-system"
-            name="gz::sim::systems::JointController">
-            <joint_name>base_left_wheel_joint</joint_name>
+            <joint_name>horizontal_prismatic3_roll_joint</joint_name>
+            <joint_name>roll_pitch_joint</joint_name>
         </plugin>
     </gazebo>
 
@@ -34,6 +29,22 @@
             filename="gz-sim-joint-controller-system"
             name="gz::sim::systems::JointController">
             <joint_name>horizontal_prismatic1_2_joint</joint_name>
+        </plugin>
+    </gazebo>
+
+    <gazebo>
+        <plugin
+            filename="gz-sim-joint-controller-system"
+            name="gz::sim::systems::JointController">
+            <joint_name>horizontal_prismatic3_roll_joint</joint_name>
+        </plugin>
+    </gazebo>
+
+    <gazebo>
+        <plugin
+            filename="gz-sim-joint-controller-system"
+            name="gz::sim::systems::JointController">
+            <joint_name>roll_pitch_joint</joint_name>
         </plugin>
     </gazebo>
 

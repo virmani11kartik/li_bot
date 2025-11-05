@@ -28,7 +28,7 @@
     <joint name="base_camera_joint" type="fixed">
         <parent link="base_link" />
         <child link="camera_link" />
-        <origin xyz="${base_length / 2.0 + 0.05} 0 ${base_height / 2.0}" rpy="0 0 0"/>
+        <origin xyz="${base_length / 2.0 + 0.005} 0 ${base_height / 2.0}" rpy="0 0 0"/>
     </joint>
     
     <!-- generate an optical frame 

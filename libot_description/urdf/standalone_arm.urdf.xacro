@@ -5,9 +5,10 @@
     <xacro:include filename="arm.xacro" />
     <xacro:include filename="arm_gazebo.xacro" />
     <xacro:include filename="gripper.xacro" />
+    <xacro:include filename="gripper_gazebo.xacro" />
 
-    <joint name="gripper_pitch_base_joint" type="continuous">
-        <parent link="gripper_pitch_link" />
+    <joint name="pitch_gripper_joint" type="fixed">
+        <parent link="pitch_link" />
         <child link="gripper_base_link" />
         <origin xyz="0 0 0" rpy="0 0 ${pi/2}"/>
         <axis xyz="0 0 1" />
