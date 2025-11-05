@@ -4,5 +4,15 @@
     <!-- <xacro:include filename="common_properties.xacro" />  -->
     <xacro:include filename="arm.xacro" />
     <xacro:include filename="arm_gazebo.xacro" />
+    <xacro:include filename="gripper.xacro" />
+
+    <joint name="gripper_pitch_base_joint" type="continuous">
+        <parent link="gripper_pitch_link" />
+        <child link="gripper_base_link" />
+        <origin xyz="0 0 0" rpy="0 0 ${pi/2}"/>
+        <axis xyz="0 0 1" />
+        <limit effort="100" velocity="100" />
+        <dynamics friction="0.3" damping="0.3" />
+    </joint>
 
 </robot>
