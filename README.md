@@ -5,8 +5,8 @@
 </p>
 
 LiBot is an **autonomous library robot** designed to help libraries manage, organize, and inventory their shelves efficiently.  
-It’s built for the **SICK LiDAR University Competition ($10K Edition)** — only **15 teams across the U.S.** were selected, and our team is proud to represent the University of Pennsylvania.  
-The project spans one year, focusing on leveraging a **SICK 2D LiDAR** with complementary **vision-based perception** to achieve precise navigation and book interaction.
+It’s built for the **[SICK LiDAR $10K Challenge](https://www.sick.com/us/en/sick-10k-challenge/w/10K-Challenge)** — only **"15 teams across the US and Canada to support innovation and student achievement in automation and technology"**. We were selected, and our team is proud to represent the University of Pennsylvania.  
+The project spans one year, focusing on leveraging a **SICK 2D LiDAR (picoScan150)** with complementary **vision-based perception** to achieve precise navigation, book interaction and autonomous library management.
 
 ---
 
