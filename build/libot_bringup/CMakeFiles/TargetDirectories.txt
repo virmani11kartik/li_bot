@@ -1,9 +1,0 @@
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/uninstall.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/libot_bringup_uninstall.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/test.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/edit_cache.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/rebuild_cache.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/list_install_components.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/install.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/install/local.dir
-/home/kartik/li_bot/build/libot_bringup/CMakeFiles/install/strip.dir

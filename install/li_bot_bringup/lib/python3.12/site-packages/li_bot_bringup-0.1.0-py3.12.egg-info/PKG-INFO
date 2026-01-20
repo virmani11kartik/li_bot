@@ -1,7 +1,0 @@
-Metadata-Version: 2.1
-Name: li-bot-bringup
-Version: 0.1.0
-Summary: li_bot bringup: sick picoscan + static TF + EKF (+ optional RViz) + SLAM launcher
-Maintainer: kartik
-Maintainer-email: kartik@todo.todo
-License: Apache-2.0
