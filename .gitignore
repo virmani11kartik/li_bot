@@ -8,3 +8,5 @@ log/
 build/
 install/
 log/
+
+ocr_env/
