@@ -6,12 +6,14 @@ from paddleocr import PaddleOCR
 import re
 
 # Configuration
-IMAGE_PATH = "sample_2.jpg"  # Change this to your image path
+IMAGE_PATH = "d455_snapshot.jpg"  
 
-ROI_X0, ROI_Y0 = 0.10, 0.36  # Adjust ROI as needed for your image
-ROI_X1, ROI_Y1 = 0.95, 0.70
+# ROI_X0, ROI_Y0 = 0.10, 0.36  # Adjust ROI
+# ROI_X1, ROI_Y1 = 0.95, 0.70
 
-# Store call numbers with their positions
+ROI_X0, ROI_Y0 = 0.05, 0.50  # Adjust ROI
+ROI_X1, ROI_Y1 = 0.95, 0.92
+
 call_number_registry = {}
 
 ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False)
@@ -26,25 +28,19 @@ def crop_roi(img):
     return roi, (x0, y0, x1, y1)
 
 def preprocess_for_ocr(roi_bgr):
-    """Enhanced preprocessing for better OCR results"""
     # Convert to grayscale
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    
     # Apply CLAHE for better contrast
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     gray = clahe.apply(gray)
-    
     # Denoise
     gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-    
     # Sharpen
     kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
     gray = cv2.filter2D(gray, -1, kernel)
-    
     # Adaptive thresholding for better text extraction
     # binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
     #                                cv2.THRESH_BINARY, 11, 2)
-    
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
 def box_area(box):
@@ -63,7 +59,6 @@ def box_bounds(box):
     return min(xs), min(ys), max(xs), max(ys)
 
 def extract_call_number(text):
-    """Extract potential Library of Congress or Dewey Decimal call numbers."""
     text = str(text).strip()
     
     # Remove common noise words
@@ -76,11 +71,6 @@ def extract_call_number(text):
     lc_match = re.search(r'[A-Z]{1,3}\s*\d+(?:\.\d+)?(?:\s*\.?[A-Z]\d+)?', text, re.IGNORECASE)
     if lc_match:
         return lc_match.group(0).replace(' ', '').upper()
-    
-    # Dewey pattern: 3 digits possibly followed by decimal
-    dewey_match = re.search(r'\d{3}(?:\.\d+)?', text)
-    if dewey_match:
-        return dewey_match.group(0)
     
     # Any alphanumeric that looks like a call number
     alphanum_match = re.search(r'[A-Z]+\d+(?:\.\d+)?', text, re.IGNORECASE)
@@ -99,10 +89,6 @@ def extract_call_number(text):
     return None
 
 def cluster_detections_by_book(detections):
-    """
-    Group detections into book clusters based on X position.
-    Multiple labels on same spine should be grouped together.
-    """
     if not detections:
         return []
     
@@ -148,39 +134,20 @@ def cluster_detections_by_book(detections):
     return x_clusters
 
 def build_call_number_from_cluster(cluster_items):
-    """
-    Extract the best call number from a cluster of detected text.
-    """
-    # First, try to find the best call number candidate
-    best_call_number = None
-    best_confidence = 0
-    
-    for box, text, conf, cx, cy in cluster_items:
-        call_num = extract_call_number(text)
-        if call_num and conf > best_confidence:
-            best_call_number = call_num
-            best_confidence = conf
-    
-    if best_call_number:
-        return best_call_number
-    
-    # Otherwise, combine text and try again
+    # Sort by Y position (top to bottom), then X position (left to right)
     sorted_items = sorted(cluster_items, key=lambda item: (item[4], item[3]))
-    text_parts = [item[1] for item in sorted_items]
-    combined_text = " ".join(text_parts)
     
-    call_number = extract_call_number(combined_text)
+    # Combine all text parts in order
+    text_parts = []
+    for box, text, conf, cx, cy in sorted_items:
+        cleaned = text.strip().upper()
+        if cleaned and len(cleaned) > 0:
+            text_parts.append(cleaned)
     
-    if not call_number:
-        # Return the most likely call number text
-        for box, text, conf, cx, cy in sorted(cluster_items, key=lambda x: x[2], reverse=True):
-            if extract_call_number(text):
-                return text.strip().upper()
-        # Last resort: return highest confidence text
-        longest = max(cluster_items, key=lambda item: item[2])
-        return longest[1].strip().upper()
+    # Join all parts with spaces
+    full_call_number = " ".join(text_parts)
     
-    return call_number
+    return full_call_number if full_call_number else "UNKNOWN"
 
 def main():
     # Load image
@@ -289,27 +256,27 @@ def main():
             pts = np.array([[int(p[0] + x0), int(p[1] + y0)] for p in box], dtype=np.int32)
             cv2.polylines(disp, [pts], isClosed=True, color=color, thickness=3)
     
-    # Display call numbers on image
-    y_offset = 60
-    cv2.putText(disp, "Shelf Order (Left to Right):", (20, y_offset),
-               cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
+    # # Display call numbers on image
+    # y_offset = 250
+    # cv2.putText(disp, "Shelf Order (Left to Right):", (20, y_offset),
+    #            cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 10)
     
-    for i, (call_num, x_pos, conf) in enumerate(call_numbers):
-        y_offset += 45
-        display_text = f"{i+1}. {call_num}"
-        cv2.putText(disp, display_text, (20, y_offset),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 3)
+    # for i, (call_num, x_pos, conf) in enumerate(call_numbers):
+    #     y_offset += 190
+    #     display_text = f"{i+1}. {call_num}"
+    #     cv2.putText(disp, display_text, (20, y_offset),
+    #                cv2.FONT_HERSHEY_SIMPLEX, 4, (0, 255, 0), 12)
     
-    cv2.putText(disp, f"Books Detected: {len(clusters)}", (20, 30),
-               cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+    # cv2.putText(disp, f"Books Detected: {len(clusters)}", (20, 120),
+    #            cv2.FONT_HERSHEY_SIMPLEX, 4.0, (0, 0, 255), 8)
     
     # Save and show results
-    output_path = "result.jpg"
+    output_path = "d455_result.jpg"
     cv2.imwrite(output_path, disp)
     print(f"\nResult saved to: {output_path}")
     
     # Display
-    scale_percent = 30  # Resize for display
+    scale_percent = 100  # Resize for display
     width = int(disp.shape[1] * scale_percent / 100)
     height = int(disp.shape[0] * scale_percent / 100)
     resized = cv2.resize(disp, (width, height), interpolation=cv2.INTER_AREA)
@@ -319,13 +286,13 @@ def main():
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     
-    # Final summary
-    print("\n" + "="*60)
-    print("FINAL SHELF ORDER (Left to Right)")
-    print("="*60)
-    for i, (call_num, x_pos, conf) in enumerate(call_numbers):
-        print(f"{i+1}. {call_num}")
-    print("="*60)
+    # # Final summary
+    # print("\n" + "="*60)
+    # print("FINAL SHELF ORDER (Left to Right)")
+    # print("="*60)
+    # for i, (call_num, x_pos, conf) in enumerate(call_numbers):
+    #     print(f"{i+1}. {call_num}")
+    # print("="*60)
 
 if __name__ == "__main__":
     main()
