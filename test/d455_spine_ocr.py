@@ -7,31 +7,120 @@ import pyrealsense2 as rs
 from paddleocr import PaddleOCR
 import re
 
-# RealSense Configuration
-COLOR_W, COLOR_H, FPS = 1280, 720, 30
+# RealSense Configuration - OPTIMIZED FOR IMAGE QUALITY
+COLOR_W, COLOR_H, FPS = 1920, 1080, 15  # Higher resolution, lower FPS for better quality
 
 # ROI Configuration
-ROI_X0, ROI_Y0 = 0.10, 0.48
-ROI_X1, ROI_Y1 = 0.70, 0.80
+ROI_X0, ROI_Y0 = 0.25, 0.50
+ROI_X1, ROI_Y1 = 0.80, 0.75
 
 # OCR Configuration
-OCR_PERIOD_S = 0.50  # Run OCR every 0.5 seconds
+OCR_PERIOD_S = 1.0  # Run OCR every 1 second (slower for stability)
 
-# Store call numbers with their positions
-call_number_registry = {}
+# Multi-frame averaging for better image quality
+FRAME_BUFFER_SIZE = 5  # Average 5 frames to reduce noise
 
 ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False)
 
-# Initialize RealSense pipeline
+# Initialize RealSense pipeline with optimized settings
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.color, COLOR_W, COLOR_H, rs.format.bgr8, FPS)
 
-profile = pipeline.start(config)
+# Try to find and configure the device
+ctx = rs.context()
+devices = ctx.query_devices()
+
+if len(devices) == 0:
+    raise RuntimeError("No RealSense device connected!")
+
+print(f"Found RealSense device: {devices[0].get_info(rs.camera_info.name)}")
+
+# Enable color stream with fallback options
+try:
+    config.enable_stream(rs.stream.color, COLOR_W, COLOR_H, rs.format.bgr8, FPS)
+    profile = pipeline.start(config)
+    print(f"Started stream: {COLOR_W}x{COLOR_H} @ {FPS}fps")
+except RuntimeError as e:
+    print(f"Failed to start with {COLOR_W}x{COLOR_H} @ {FPS}fps")
+    print("Trying fallback configuration: 1280x720 @ 30fps")
+    config = rs.config()
+    COLOR_W, COLOR_H, FPS = 1280, 720, 30
+    config.enable_stream(rs.stream.color, COLOR_W, COLOR_H, rs.format.bgr8, FPS)
+    profile = pipeline.start(config)
+
+# Get the color sensor and adjust camera settings
+try:
+    device = profile.get_device()
+    color_sensor = device.first_color_sensor()
+    
+    print("\nConfiguring camera settings...")
+    
+    # Disable auto-exposure initially to set manual values
+    if color_sensor.supports(rs.option.enable_auto_exposure):
+        color_sensor.set_option(rs.option.enable_auto_exposure, 1)
+        print("  Auto-exposure: ENABLED")
+        
+    # Adjust exposure (if supported)
+    if color_sensor.supports(rs.option.exposure):
+        try:
+            color_sensor.set_option(rs.option.exposure, 166)
+            print(f"  Exposure: {color_sensor.get_option(rs.option.exposure)}")
+        except:
+            print("  Exposure: Could not set")
+    
+    # Adjust gain (brightness)
+    if color_sensor.supports(rs.option.gain):
+        try:
+            color_sensor.set_option(rs.option.gain, 64)
+            print(f"  Gain: {color_sensor.get_option(rs.option.gain)}")
+        except:
+            print("  Gain: Could not set")
+    
+    # Adjust white balance
+    if color_sensor.supports(rs.option.enable_auto_white_balance):
+        color_sensor.set_option(rs.option.enable_auto_white_balance, 1)
+        print("  Auto white balance: ENABLED")
+    
+    # Adjust sharpness
+    if color_sensor.supports(rs.option.sharpness):
+        try:
+            color_sensor.set_option(rs.option.sharpness, 50)
+            print(f"  Sharpness: {color_sensor.get_option(rs.option.sharpness)}")
+        except:
+            print("  Sharpness: Could not set")
+    
+    # Adjust saturation
+    if color_sensor.supports(rs.option.saturation):
+        try:
+            color_sensor.set_option(rs.option.saturation, 64)
+            print(f"  Saturation: {color_sensor.get_option(rs.option.saturation)}")
+        except:
+            print("  Saturation: Could not set")
+    
+    # Adjust contrast
+    if color_sensor.supports(rs.option.contrast):
+        try:
+            color_sensor.set_option(rs.option.contrast, 50)
+            print(f"  Contrast: {color_sensor.get_option(rs.option.contrast)}")
+        except:
+            print("  Contrast: Could not set")
+    
+except Exception as e:
+    print(f"Warning: Could not configure all camera settings: {e}")
+    print("Continuing with default settings...")
+    color_sensor = None
 
 # Warm up camera
-for _ in range(15):
+print("Warming up camera (30 frames)...")
+for i in range(30):
     pipeline.wait_for_frames()
+    if i % 10 == 0:
+        print(f"  {i}/30...")
+
+print("Camera ready!\n")
+
+# Frame buffer for averaging
+frame_buffer = []
 
 last_ocr_t = 0.0
 cached_results = []
@@ -51,21 +140,34 @@ def crop_roi(img):
     roi = img[y0:y1, x0:x1].copy()
     return roi, (x0, y0, x1, y1)
 
+def average_frames(buffer):
+    """Average multiple frames to reduce noise"""
+    if len(buffer) == 0:
+        return None
+    return np.mean(buffer, axis=0).astype(np.uint8)
+
 def preprocess_for_ocr(roi_bgr):
-    """Enhanced preprocessing for better OCR results"""
+    """Enhanced preprocessing for better OCR results on D455"""
     # Convert to grayscale
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
     
+    # Apply bilateral filter to reduce noise while preserving edges
+    gray = cv2.bilateralFilter(gray, 9, 75, 75)
+    
     # Apply CLAHE for better contrast
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
     gray = clahe.apply(gray)
     
-    # Denoise
-    gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+    # Advanced denoising
+    gray = cv2.fastNlMeansDenoising(gray, None, h=10, templateWindowSize=7, searchWindowSize=21)
     
-    # Sharpen
-    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    gray = cv2.filter2D(gray, -1, kernel)
+    # Sharpen using unsharp mask
+    gaussian = cv2.GaussianBlur(gray, (0, 0), 2.0)
+    gray = cv2.addWeighted(gray, 2.0, gaussian, -1.0, 0)
+    
+    # Morphological operations to enhance text
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
     
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
@@ -85,10 +187,6 @@ def box_bounds(box):
     return min(xs), min(ys), max(xs), max(ys)
 
 def cluster_detections_by_book(detections):
-    """
-    Group detections into book clusters based on X position.
-    Multiple labels on same spine should be grouped together.
-    """
     if not detections:
         return []
     
@@ -97,16 +195,13 @@ def cluster_detections_by_book(detections):
     for box, text, conf in detections:
         cx, cy = box_center(box)
         x_min, y_min, x_max, y_max = box_bounds(box)
-        width = x_max - x_min
         placed = False
         
-        # Try to place in existing X cluster
         for cluster in x_clusters:
             cluster_cx = cluster["x_pos"]
             cluster_x_min = cluster["x_min"]
             cluster_x_max = cluster["x_max"]
             
-            # Check if boxes overlap horizontally or are very close
             horizontal_overlap = not (x_max < cluster_x_min - 50 or x_min > cluster_x_max + 50)
             close_enough = abs(cx - cluster_cx) < 250
             
@@ -128,36 +223,33 @@ def cluster_detections_by_book(detections):
                 "all_boxes": [box]
             })
     
-    # Sort clusters by X position (left to right)
     x_clusters.sort(key=lambda c: c["x_pos"])
-    
     return x_clusters
 
 def build_call_number_from_cluster(cluster_items):
-    """
-    Build complete call number by reading all stacked labels top to bottom.
-    Example: MATH PHYS QC 794.6 S85 B58 2013
-    """
-    # Sort by Y position (top to bottom), then X position (left to right)
     sorted_items = sorted(cluster_items, key=lambda item: (item[4], item[3]))
     
-    # Combine all text parts in order
     text_parts = []
     for box, text, conf, cx, cy in sorted_items:
         cleaned = text.strip().upper()
         if cleaned and len(cleaned) > 0:
             text_parts.append(cleaned)
     
-    # Join all parts with spaces
     full_call_number = " ".join(text_parts)
-    
     return full_call_number if full_call_number else "UNKNOWN"
 
 try:
-    print("Starting RealSense D455 Book Shelf Reading...")
-    print("Press 'q' or ESC to quit")
-    print("Press 's' to save current shelf order")
-    print("Press 'c' to capture current frame as image")
+    print("\nStarting OPTIMIZED RealSense D455 Book Shelf Reading...")
+    print("=" * 60)
+    print("Controls:")
+    print("  'q' or ESC - Quit")
+    print("  's' - Save current shelf order")
+    print("  'c' - Capture current frame")
+    print("  'e' - Adjust exposure (+10)")
+    print("  'E' - Adjust exposure (-10)")
+    print("  'g' - Adjust gain (+5)")
+    print("  'G' - Adjust gain (-5)")
+    print("=" * 60 + "\n")
     
     while True:
         frames = pipeline.wait_for_frames()
@@ -166,12 +258,21 @@ try:
             continue
 
         img = np.asanyarray(color_frame.get_data())
-        roi, (x0, y0, x1, y1) = crop_roi(img)
+        
+        # Add to frame buffer for averaging
+        frame_buffer.append(img.copy())
+        if len(frame_buffer) > FRAME_BUFFER_SIZE:
+            frame_buffer.pop(0)
+        
         now = time.time()
         
         # Run OCR periodically
-        if (now - last_ocr_t) >= OCR_PERIOD_S:
-            print(f"\n[{time.strftime('%H:%M:%S')}] Running OCR...")
+        if (now - last_ocr_t) >= OCR_PERIOD_S and len(frame_buffer) == FRAME_BUFFER_SIZE:
+            print(f"[{time.strftime('%H:%M:%S')}] Running OCR on averaged frame...")
+            
+            # Use averaged frame for OCR
+            averaged_img = average_frames(frame_buffer)
+            roi, (x0, y0, x1, y1) = crop_roi(averaged_img)
             
             # Preprocess
             roi_proc = preprocess_for_ocr(roi)
@@ -205,31 +306,23 @@ try:
                     if text is None or len(str(text).strip()) == 0:
                         continue
                     
-                    # Filtering
                     area = box_area(box)
                     roi_area = roi.shape[0] * roi.shape[1]
                     
-                    if area < 0.0003 * roi_area:
+                    if area < 0.0003 * roi_area or area > 0.20 * roi_area:
                         continue
                     
-                    if area > 0.20 * roi_area:
-                        continue
-                    
-                    # Aspect ratio check
                     x_min, y_min, x_max, y_max = box_bounds(box)
                     width = x_max - x_min
                     height = y_max - y_min
                     
-                    # Skip overly vertical text
                     if height > width * 2.0:
                         continue
                     
                     new_results.append((box, str(text).strip(), float(conf) if conf is not None else 0.0))
             
-            # Cluster by book
             clusters = cluster_detections_by_book(new_results)
             
-            # Extract call numbers
             call_numbers = []
             for i, cluster in enumerate(clusters):
                 call_num = build_call_number_from_cluster(cluster["items"])
@@ -237,22 +330,20 @@ try:
                 conf_avg = sum(item[2] for item in cluster["items"]) / len(cluster["items"])
                 call_numbers.append((call_num, x_pos, conf_avg))
             
-            # Cache results
             cached_results = new_results
             cached_clusters = clusters
             cached_call_numbers = call_numbers
             last_ocr_t = now
             
-            # Print to console
-            print(f"Detected {len(clusters)} books:")
+            print(f"  Detected {len(clusters)} books:")
             for i, (call_num, x_pos, conf) in enumerate(call_numbers):
-                print(f"  {i+1}. {call_num}")
+                print(f"    {i+1}. {call_num}")
 
-        # Create visualization
+        # Visualize on latest frame
+        roi, (x0, y0, x1, y1) = crop_roi(img)
         disp = img.copy()
         cv2.rectangle(disp, (x0, y0), (x1, y1), (0, 255, 0), 3)
         
-        # Draw clusters with different colors
         colors = [(255,0,0), (0,255,255), (255,0,255), (0,165,255), (255,255,0), (128,0,128)]
         
         for idx, cluster in enumerate(cached_clusters):
@@ -261,7 +352,6 @@ try:
                 pts = np.array([[int(p[0] + x0), int(p[1] + y0)] for p in box], dtype=np.int32)
                 cv2.polylines(disp, [pts], isClosed=True, color=color, thickness=3)
         
-        # Display call numbers on image
         y_offset = 50
         cv2.putText(disp, "Shelf Order (Left to Right):", (20, y_offset),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
@@ -272,7 +362,6 @@ try:
             cv2.putText(disp, display_text, (20, y_offset),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         
-        # Calculate and display FPS
         frame_count += 1
         if (now - t0) >= 1.0:
             disp_fps = frame_count / (now - t0)
@@ -280,35 +369,70 @@ try:
             frame_count = 0
         
         cv2.putText(disp, f"FPS: {disp_fps:.1f} | Books: {len(cached_clusters)}", 
-                   (COLOR_W - 350, 30),
+                   (COLOR_W - 400, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
         
-        cv2.imshow("D455 Book Shelf Reading", disp)
+        # Show buffer status
+        cv2.putText(disp, f"Buffer: {len(frame_buffer)}/{FRAME_BUFFER_SIZE}", 
+                   (COLOR_W - 400, 70),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         
-        # Handle keyboard input
+        cv2.imshow("D455 Optimized Book Reading", disp)
+        
         key = cv2.waitKey(1) & 0xFF
-        if key == 27 or key == ord('q'):  # ESC or 'q' to quit
+        if key == 27 or key == ord('q'):
             break
-        elif key == ord('s'):  # 's' to save current order
+        elif key == ord('s'):
             print("\n" + "="*60)
-            print("SAVED SHELF ORDER (Left to Right)")
+            print("SAVED SHELF ORDER")
             print("="*60)
             for i, (call_num, x_pos, conf) in enumerate(cached_call_numbers):
                 print(f"{i+1}. {call_num}")
             print("="*60 + "\n")
-        elif key == ord('c'):  # 'c' to capture frame
+        elif key == ord('c'):
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             capture_path = f"capture_{timestamp}.jpg"
             cv2.imwrite(capture_path, disp)
             print(f"\nFrame captured: {capture_path}\n")
+        elif key == ord('e') and color_sensor is not None:
+            if color_sensor.supports(rs.option.exposure):
+                try:
+                    current = color_sensor.get_option(rs.option.exposure)
+                    color_sensor.set_option(rs.option.exposure, min(current + 10, 10000))
+                    print(f"Exposure increased to: {color_sensor.get_option(rs.option.exposure)}")
+                except:
+                    print("Could not adjust exposure")
+        elif key == ord('E') and color_sensor is not None:
+            if color_sensor.supports(rs.option.exposure):
+                try:
+                    current = color_sensor.get_option(rs.option.exposure)
+                    color_sensor.set_option(rs.option.exposure, max(current - 10, 1))
+                    print(f"Exposure decreased to: {color_sensor.get_option(rs.option.exposure)}")
+                except:
+                    print("Could not adjust exposure")
+        elif key == ord('g') and color_sensor is not None:
+            if color_sensor.supports(rs.option.gain):
+                try:
+                    current = color_sensor.get_option(rs.option.gain)
+                    color_sensor.set_option(rs.option.gain, min(current + 5, 128))
+                    print(f"Gain increased to: {color_sensor.get_option(rs.option.gain)}")
+                except:
+                    print("Could not adjust gain")
+        elif key == ord('G') and color_sensor is not None:
+            if color_sensor.supports(rs.option.gain):
+                try:
+                    current = color_sensor.get_option(rs.option.gain)
+                    color_sensor.set_option(rs.option.gain, max(current - 5, 0))
+                    print(f"Gain decreased to: {color_sensor.get_option(rs.option.gain)}")
+                except:
+                    print("Could not adjust gain")
 
 finally:
     pipeline.stop()
     cv2.destroyAllWindows()
     
-    # Final output
     print("\n" + "="*60)
-    print("FINAL SHELF ORDER (Left to Right)")
+    print("FINAL SHELF ORDER")
     print("="*60)
     for i, (call_num, x_pos, conf) in enumerate(cached_call_numbers):
         print(f"{i+1}. {call_num}")

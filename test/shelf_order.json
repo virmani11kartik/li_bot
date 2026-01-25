@@ -1,0 +1,58 @@
+{
+  "image_file": "sample_2.jpg",
+  "num_books": 4,
+  "books": [
+    {
+      "position": 1,
+      "call_number": "MATH PHYS QC 794.6 S85 B58 2013",
+      "x_position": 253.71428571428572,
+      "confidence": 0.9548384036336627,
+      "text_components": [
+        "MATH",
+        "PHYS",
+        "QC",
+        "794.6",
+        "S85",
+        "B58",
+        "2013"
+      ]
+    },
+    {
+      "position": 2,
+      "call_number": "QC 174.12 H39 2001",
+      "x_position": 1119.1875,
+      "confidence": 0.9676435440778732,
+      "text_components": [
+        "QC",
+        "174.12",
+        "H39",
+        "2001"
+      ]
+    },
+    {
+      "position": 3,
+      "call_number": "Q 325.5 M873 2023",
+      "x_position": 2023.125,
+      "confidence": 0.9951922595500946,
+      "text_components": [
+        "Q",
+        "325.5",
+        "M873",
+        "2023"
+      ]
+    },
+    {
+      "position": 4,
+      "call_number": "ENGR TJ 211 T575 2005",
+      "x_position": 3142.25,
+      "confidence": 0.9956642746925354,
+      "text_components": [
+        "ENGR",
+        "TJ",
+        "211",
+        "T575",
+        "2005"
+      ]
+    }
+  ]
+}

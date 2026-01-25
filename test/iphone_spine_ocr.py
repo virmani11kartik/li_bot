@@ -4,17 +4,18 @@ import cv2
 import numpy as np
 from paddleocr import PaddleOCR
 import re
+import json
 
 # Configuration
-IMAGE_PATH = "d455_snapshot.jpg"  
+IMAGE_PATH = "sample_2.jpg"  # Change this to your image path
+OUTPUT_JSON = "shelf_order.json"  # Output file for call numbers
 
-# ROI_X0, ROI_Y0 = 0.10, 0.36  # Adjust ROI
-# ROI_X1, ROI_Y1 = 0.95, 0.70
+ROI_X0, ROI_Y0 = 0.10, 0.36  # Adjust ROI
+ROI_X1, ROI_Y1 = 0.95, 0.70
 
-ROI_X0, ROI_Y0 = 0.05, 0.50  # Adjust ROI
-ROI_X1, ROI_Y1 = 0.95, 0.92
+# ROI_X0, ROI_Y0 = 0.05, 0.50  # Adjust ROI
+# ROI_X1, ROI_Y1 = 0.95, 0.92
 
-call_number_registry = {}
 
 ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False)
 
@@ -28,19 +29,12 @@ def crop_roi(img):
     return roi, (x0, y0, x1, y1)
 
 def preprocess_for_ocr(roi_bgr):
-    # Convert to grayscale
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    # Apply CLAHE for better contrast
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     gray = clahe.apply(gray)
-    # Denoise
     gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-    # Sharpen
     kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
     gray = cv2.filter2D(gray, -1, kernel)
-    # Adaptive thresholding for better text extraction
-    # binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-    #                                cv2.THRESH_BINARY, 11, 2)
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
 def box_area(box):
@@ -58,36 +52,6 @@ def box_bounds(box):
     ys = [p[1] for p in box]
     return min(xs), min(ys), max(xs), max(ys)
 
-def extract_call_number(text):
-    text = str(text).strip()
-    
-    # Remove common noise words
-    noise_words = ['the', 'of', 'and', 'in', 'to', 'a', 'is', 'for', 'by']
-    words = text.split()
-    filtered = [w for w in words if w.lower() not in noise_words]
-    text = ' '.join(filtered) if filtered else text
-    
-    # LC pattern: 1-3 letters followed by digits
-    lc_match = re.search(r'[A-Z]{1,3}\s*\d+(?:\.\d+)?(?:\s*\.?[A-Z]\d+)?', text, re.IGNORECASE)
-    if lc_match:
-        return lc_match.group(0).replace(' ', '').upper()
-    
-    # Any alphanumeric that looks like a call number
-    alphanum_match = re.search(r'[A-Z]+\d+(?:\.\d+)?', text, re.IGNORECASE)
-    if alphanum_match:
-        return alphanum_match.group(0).upper()
-    
-    # Simplified patterns for short codes
-    short_match = re.search(r'[A-Z]\d+', text, re.IGNORECASE)
-    if short_match:
-        return short_match.group(0).upper()
-    
-    # If contains digits, might be a call number
-    if re.search(r'\d', text):
-        return text.strip().upper()
-    
-    return None
-
 def cluster_detections_by_book(detections):
     if not detections:
         return []
@@ -97,16 +61,13 @@ def cluster_detections_by_book(detections):
     for box, text, conf in detections:
         cx, cy = box_center(box)
         x_min, y_min, x_max, y_max = box_bounds(box)
-        width = x_max - x_min
         placed = False
         
-        # Try to place in existing X cluster
         for cluster in x_clusters:
             cluster_cx = cluster["x_pos"]
             cluster_x_min = cluster["x_min"]
             cluster_x_max = cluster["x_max"]
             
-            # Check if boxes overlap horizontally or are very close
             horizontal_overlap = not (x_max < cluster_x_min - 50 or x_min > cluster_x_max + 50)
             close_enough = abs(cx - cluster_cx) < 250
             
@@ -128,32 +89,25 @@ def cluster_detections_by_book(detections):
                 "all_boxes": [box]
             })
     
-    # Sort clusters by X position (left to right)
     x_clusters.sort(key=lambda c: c["x_pos"])
-    
     return x_clusters
 
 def build_call_number_from_cluster(cluster_items):
-    # Sort by Y position (top to bottom), then X position (left to right)
     sorted_items = sorted(cluster_items, key=lambda item: (item[4], item[3]))
     
-    # Combine all text parts in order
     text_parts = []
     for box, text, conf, cx, cy in sorted_items:
         cleaned = text.strip().upper()
         if cleaned and len(cleaned) > 0:
             text_parts.append(cleaned)
     
-    # Join all parts with spaces
     full_call_number = " ".join(text_parts)
-    
     return full_call_number if full_call_number else "UNKNOWN"
 
 def main():
     # Load image
     if not os.path.exists(IMAGE_PATH):
         print(f"Error: Image file '{IMAGE_PATH}' not found!")
-        print("Please place your iPhone image in the same directory as this script.")
         return
     
     img = cv2.imread(IMAGE_PATH)
@@ -173,7 +127,7 @@ def main():
     roi_proc = preprocess_for_ocr(roi)
     
     # Run OCR
-    print("Running OCR (this may take a moment)...")
+    print("Running OCR...")
     result = ocr.ocr(roi_proc, cls=True)
     
     # Process results
@@ -183,8 +137,6 @@ def main():
         lines = result[0] if isinstance(result[0], list) or (result[0] is None) else result
         if lines is None:
             lines = []
-        
-        print(f"\nFound {len(lines)} text detections")
         
         for line in lines:
             if line is None or len(line) < 2:
@@ -204,50 +156,70 @@ def main():
             if text is None or len(str(text).strip()) == 0:
                 continue
             
-            # Filtering
             area = box_area(box)
             roi_area = roi.shape[0] * roi.shape[1]
             
-            if area < 0.0003 * roi_area:
+            if area < 0.0003 * roi_area or area > 0.20 * roi_area:
                 continue
             
-            if area > 0.20 * roi_area:
-                continue
-            
-            # Aspect ratio check
             x_min, y_min, x_max, y_max = box_bounds(box)
             width = x_max - x_min
             height = y_max - y_min
             
-            # Skip overly vertical text
             if height > width * 2.0:
                 continue
             
             new_results.append((box, str(text).strip(), float(conf) if conf is not None else 0.0))
-            print(f"  - '{text}' (conf: {conf:.2f})")
     
     # Cluster by book
-    print(f"\n{len(new_results)} detections after filtering")
     clusters = cluster_detections_by_book(new_results)
-    print(f"Detected {len(clusters)} books\n")
+    print(f"\nDetected {len(clusters)} books")
     
-    # Extract call numbers
-    call_numbers = []
+    # Extract call numbers and build dictionary
+    shelf_order = {
+        "image_file": IMAGE_PATH,
+        "num_books": len(clusters),
+        "books": []
+    }
+    
     for i, cluster in enumerate(clusters):
         call_num = build_call_number_from_cluster(cluster["items"])
         x_pos = cluster["x_pos"]
         conf_avg = sum(item[2] for item in cluster["items"]) / len(cluster["items"])
-        call_numbers.append((call_num, x_pos, conf_avg))
-        print(f"Book {i+1}: {call_num} (x={int(x_pos)}, avg_conf={conf_avg:.2f})")
-        print(f"  Contains {len(cluster['items'])} text detections:")
-        for box, text, conf, cx, cy in cluster["items"]:
-            print(f"    - '{text}' (conf: {conf:.2f})")
+        
+        book_entry = {
+            "position": i + 1,
+            "call_number": call_num,
+            "x_position": float(x_pos),
+            "confidence": float(conf_avg),
+            "text_components": [item[1] for item in cluster["items"]]
+        }
+        
+        shelf_order["books"].append(book_entry)
+        
+        print(f"\nBook {i+1}:")
+        print(f"  Call Number: {call_num}")
+        print(f"  X Position: {x_pos:.1f}")
+        print(f"  Confidence: {conf_avg:.2f}")
+        print(f"  Components: {book_entry['text_components']}")
+    
+    # Save to JSON
+    with open(OUTPUT_JSON, 'w') as f:
+        json.dump(shelf_order, f, indent=2)
+    
+    print(f"\n{'='*60}")
+    print(f"Call numbers extracted and saved to: {OUTPUT_JSON}")
+    print(f"{'='*60}")
+    
+    # Print summary
+    print("\nShelf Order (Left to Right):")
+    for book in shelf_order["books"]:
+        print(f"{book['position']}. {book['call_number']}")
     
     # Create visualization
     disp = img.copy()
     cv2.rectangle(disp, (x0, y0), (x1, y1), (0, 255, 0), 3)
     
-    # Draw clusters with different colors
     colors = [(255,0,0), (0,255,255), (255,0,255), (0,165,255), (255,255,0), (128,0,128)]
     
     for idx, cluster in enumerate(clusters):
@@ -256,43 +228,32 @@ def main():
             pts = np.array([[int(p[0] + x0), int(p[1] + y0)] for p in box], dtype=np.int32)
             cv2.polylines(disp, [pts], isClosed=True, color=color, thickness=3)
     
-    # # Display call numbers on image
-    # y_offset = 250
-    # cv2.putText(disp, "Shelf Order (Left to Right):", (20, y_offset),
-    #            cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 10)
+    y_offset = 250
+    cv2.putText(disp, "Extracted Call Numbers:", (20, y_offset),
+               cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 10)
     
-    # for i, (call_num, x_pos, conf) in enumerate(call_numbers):
-    #     y_offset += 190
-    #     display_text = f"{i+1}. {call_num}"
-    #     cv2.putText(disp, display_text, (20, y_offset),
-    #                cv2.FONT_HERSHEY_SIMPLEX, 4, (0, 255, 0), 12)
+    for book in shelf_order["books"]:
+        y_offset += 190
+        display_text = f"{book['position']}. {book['call_number']}"
+        cv2.putText(disp, display_text, (20, y_offset),
+                   cv2.FONT_HERSHEY_SIMPLEX, 4, (0, 255, 0), 12)
     
-    # cv2.putText(disp, f"Books Detected: {len(clusters)}", (20, 120),
-    #            cv2.FONT_HERSHEY_SIMPLEX, 4.0, (0, 0, 255), 8)
+    cv2.putText(disp, f"Books Detected: {len(clusters)}", (20, 120),
+               cv2.FONT_HERSHEY_SIMPLEX, 4.0, (0, 0, 255), 8)
     
-    # Save and show results
-    output_path = "d455_result.jpg"
+    output_path = "extracted_result.jpg"
     cv2.imwrite(output_path, disp)
-    print(f"\nResult saved to: {output_path}")
+    print(f"\nVisualization saved to: {output_path}")
     
-    # Display
-    scale_percent = 100  # Resize for display
+    scale_percent = 30
     width = int(disp.shape[1] * scale_percent / 100)
     height = int(disp.shape[0] * scale_percent / 100)
     resized = cv2.resize(disp, (width, height), interpolation=cv2.INTER_AREA)
     
-    cv2.imshow("iPhone Image Analysis", resized)
+    cv2.imshow("Call Number Extraction", resized)
     print("\nPress any key to close the window...")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-    
-    # # Final summary
-    # print("\n" + "="*60)
-    # print("FINAL SHELF ORDER (Left to Right)")
-    # print("="*60)
-    # for i, (call_num, x_pos, conf) in enumerate(call_numbers):
-    #     print(f"{i+1}. {call_num}")
-    # print("="*60)
 
 if __name__ == "__main__":
     main()
