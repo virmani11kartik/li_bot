@@ -1,58 +1,67 @@
 {
-  "image_file": "sample_2.jpg",
-  "num_books": 4,
+  "image_file": "shelf_video_1.MOV",
+  "num_books": 5,
   "books": [
     {
-      "position": 1,
-      "call_number": "MATH PHYS QC 794.6 S85 B58 2013",
-      "x_position": 253.71428571428572,
-      "confidence": 0.9548384036336627,
+      "call_number": "TJ 211 T575 2005",
+      "confidence": 0.984351760149002,
       "text_components": [
-        "MATH",
-        "PHYS",
-        "QC",
-        "794.6",
-        "S85",
-        "B58",
-        "2013"
-      ]
+        "TJ",
+        "211",
+        "T575",
+        "2005"
+      ],
+      "detection_count": 5,
+      "position": 1
     },
     {
-      "position": 2,
-      "call_number": "QC 174.12 H39 2001",
-      "x_position": 1119.1875,
-      "confidence": 0.9676435440778732,
-      "text_components": [
-        "QC",
-        "174.12",
-        "H39",
-        "2001"
-      ]
-    },
-    {
-      "position": 3,
-      "call_number": "Q 325.5 M873 2023",
-      "x_position": 2023.125,
-      "confidence": 0.9951922595500946,
-      "text_components": [
-        "Q",
-        "325.5",
-        "M873",
-        "2023"
-      ]
-    },
-    {
-      "position": 4,
       "call_number": "ENGR TJ 211 T575 2005",
-      "x_position": 3142.25,
-      "confidence": 0.9956642746925354,
+      "confidence": 0.9680135362288531,
       "text_components": [
         "ENGR",
         "TJ",
         "211",
         "T575",
         "2005"
-      ]
+      ],
+      "detection_count": 17,
+      "position": 2
+    },
+    {
+      "call_number": "QC 794.6 S85 B58 2013",
+      "confidence": 0.974718351797624,
+      "text_components": [
+        "QC",
+        "794.6",
+        "585",
+        "858",
+        "2013"
+      ],
+      "detection_count": 22,
+      "position": 3
+    },
+    {
+      "call_number": "QC 174.12 H39 2001",
+      "confidence": 0.9918630865831224,
+      "text_components": [
+        "QC",
+        "174.12",
+        "H39",
+        "2001"
+      ],
+      "detection_count": 21,
+      "position": 4
+    },
+    {
+      "call_number": "Q 325.5 M873 2023",
+      "confidence": 0.9945236081662385,
+      "text_components": [
+        "25.5",
+        "M873",
+        "2023"
+      ],
+      "detection_count": 23,
+      "position": 5
     }
   ]
 }

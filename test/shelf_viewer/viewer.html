@@ -76,6 +76,7 @@
     }
     .book.good { outline: 1px solid rgba(43,213,118,0.35); }
     .book.bad  { outline: 2px solid rgba(255,92,92,0.55); }
+    .book.dup  { opacity: 0.4; outline: 1px dashed rgba(255,204,102,0.45); }
     .book .idx {
       font-family: var(--mono);
       font-size: 11px;
@@ -109,6 +110,7 @@
     }
     .tag.bad { color: #ffd0d0; border-color: rgba(255,92,92,0.55); }
     .tag.good { color: #c9ffe2; border-color: rgba(43,213,118,0.45); }
+    .tag.dup { color: #ffe2b5; border-color: rgba(255,204,102,0.45); }
 
     /* tooltip */
     .tooltip {
@@ -154,7 +156,7 @@
   <header>
     <div>
       <h1>LC Shelf Order Viewer</h1>
-      <div class="sub">Static visual check: current order vs LC-sorted order.</div>
+      <div class="sub">Auto-deduplicated • Current order vs LC-sorted order</div>
     </div>
     <div class="pill" id="meta">loading…</div>
   </header>
@@ -162,20 +164,20 @@
   <div class="panel">
     <div class="rowTitle">
       <h2>As scanned (left → right)</h2>
-      <div class="hint">Red = out of place vs LC order</div>
+      <div class="hint">Red = out of place • Faded = duplicate</div>
     </div>
     <div class="shelf" id="rowCurrent"></div>
   </div>
 
   <div class="panel">
     <div class="rowTitle">
-      <h2>Correct order (LC sorted)</h2>
-      <div class="hint">Derived from the same scan data (prefix labels ignored)</div>
+      <h2>Correct order (LC sorted, duplicates removed)</h2>
+      <div class="hint">Only unique books, sorted by LC classification</div>
     </div>
     <div class="shelf" id="rowCorrect"></div>
     <div class="footer">
-      Prefixes like <span style="font-family:var(--mono)">MATH PHYS</span> or <span style="font-family:var(--mono)">ENGR</span>,
-      this viewer extracts the LC call number by locating the first <span style="font-family:var(--mono)">CLASS + NUMBER</span> pattern.
+      Prefixes like <span style="font-family:var(--mono)">MATH PHYS</span> or <span style="font-family:var(--mono)">ENGR</span> are stripped.
+      Duplicates are detected by comparing core LC call numbers (e.g., "TJ 211" matches "ENGR TJ 211").
     </div>
   </div>
 
@@ -185,33 +187,37 @@
 <script>
 /**
  * Extract LC portion from a raw OCR call-number-ish string.
- * Rule: find first token that is 1–3 letters AND next token starts with a digit.
- * This skips department labels like MATH/PHYS/ENGR.
+ * Remove common prefix labels (ENGR, MATH, PHYS, etc.)
  */
 function extractLC(raw) {
   if (!raw) return { lc: "", error: "empty" };
   const text = String(raw).trim().toUpperCase();
   const tokens = text.split(/\s+/).filter(Boolean);
 
+  // Remove prefix words that aren't part of LC classification
+  const prefixes = ['ENGR', 'MATH', 'PHYS', 'DNOIR', 'ENOR', 'FAGR', 'FNGR', 'SCI', 'TECH'];
+  let cleaned = [...tokens];
+  while (cleaned.length > 0 && prefixes.includes(cleaned[0])) {
+    cleaned.shift();
+  }
+
+  // Find first token that is 1–3 letters AND next token starts with a digit
   let start = -1;
-  for (let i = 0; i < tokens.length - 1; i++) {
-    const t0 = tokens[i];
-    const t1 = tokens[i + 1];
+  for (let i = 0; i < cleaned.length - 1; i++) {
+    const t0 = cleaned[i];
+    const t1 = cleaned[i + 1];
     if (/^[A-Z]{1,3}$/.test(t0) && /^\d/.test(t1)) {
       start = i;
       break;
     }
   }
+  
   if (start < 0) return { lc: "", error: "no CLASS+NUMBER pattern" };
-  return { lc: tokens.slice(start).join(" "), error: "" };
+  return { lc: cleaned.slice(start).join(" "), error: "" };
 }
 
 /**
- * Parse minimal LC components for sorting:
- * - class letters: 1–3 letters
- * - class number: numeric (supports decimals)
- * - cutter: first token like A123 / .A123 / A12B3 (we accept common OCR variations)
- * - year: 19xx or 20xx
+ * Parse minimal LC components for sorting and deduplication
  */
 function parseLC(lc) {
   const out = {
@@ -220,7 +226,8 @@ function parseLC(lc) {
     classNumber: NaN,
     cutter: "",
     year: null,
-    raw: lc
+    raw: lc,
+    core: ""  // For deduplication: "CLASS NUMBER"
   };
   if (!lc) return out;
 
@@ -240,11 +247,13 @@ function parseLC(lc) {
   out.classNumber = intPart + (decPart ? parseFloat("0." + decPart) : 0.0);
   s = s.slice(mNum[0].length).trim();
 
+  // Core for deduplication: just CLASS + NUMBER
+  out.core = `${out.classLetters} ${mNum[0]}`;
+
   // cutter: accept "A123", ".A123", "A12B3", ".A12B3"
-  // We'll take the first thing that matches.
   const mCut = s.match(/(?:^|\s)(\.?[A-Z]\d+[A-Z]?\d*)(?:\s|$)/);
   if (mCut) {
-    out.cutter = mCut[1].replace(/^\./, ""); // normalize
+    out.cutter = mCut[1].replace(/^\./, "");
     s = s.replace(mCut[1], " ").trim();
   }
 
@@ -258,7 +267,6 @@ function parseLC(lc) {
 
 /** Comparison function for sorting parsed LC objects */
 function lcCompare(a, b) {
-  // invalids go last
   if (!a.valid && !b.valid) return 0;
   if (!a.valid) return 1;
   if (!b.valid) return -1;
@@ -278,6 +286,32 @@ function lcCompare(a, b) {
   return 0;
 }
 
+/** Check if two books are duplicates based on core LC classification */
+function areDuplicates(parsed1, parsed2) {
+  if (!parsed1.valid || !parsed2.valid) return false;
+  
+  // Same core = duplicate (e.g., "TJ 211" == "TJ 211")
+  return parsed1.core === parsed2.core;
+}
+
+/** Deduplicate books - keep first occurrence of each unique core */
+function deduplicateBooks(books) {
+  const unique = [];
+  const seen = new Set();
+  
+  for (const book of books) {
+    const core = book._parsed?.core || "";
+    if (!core || !seen.has(core)) {
+      unique.push(book);
+      if (core) seen.add(core);
+    } else {
+      book._isDuplicate = true;
+    }
+  }
+  
+  return unique;
+}
+
 function el(tag, cls, html) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -285,19 +319,39 @@ function el(tag, cls, html) {
   return e;
 }
 
-function renderRow(container, books, wrongSet, titleMode) {
+function renderRow(container, books, wrongSet, titleMode, showDuplicates = false) {
   container.innerHTML = "";
-  books.forEach((b, idx) => {
+  
+  const toRender = showDuplicates ? books : books.filter(b => !b._isDuplicate);
+  
+  toRender.forEach((b, idx) => {
     const key = b._key;
     const isWrong = wrongSet.has(key);
+    const isDup = b._isDuplicate;
 
-    const card = el("div", "book " + (isWrong ? "bad" : "good"));
-    const tag = el("div", "tag " + (isWrong ? "bad" : "good"), isWrong ? "OUT" : "OK");
+    let cardClass = "book ";
+    if (isDup) cardClass += "dup";
+    else if (isWrong) cardClass += "bad";
+    else cardClass += "good";
+
+    const card = el("div", cardClass);
+    
+    let tagText = "OK";
+    let tagClass = "tag good";
+    if (isDup) {
+      tagText = "DUP";
+      tagClass = "tag dup";
+    } else if (isWrong) {
+      tagText = "OUT";
+      tagClass = "tag bad";
+    }
+    
+    const tag = el("div", tagClass, tagText);
     card.appendChild(tag);
 
-    card.appendChild(el("div", "idx", `${idx+1}. x=${b.x_position?.toFixed?.(1) ?? "?"}`));
+    const displayIdx = showDuplicates ? b._originalIndex : idx + 1;
+    card.appendChild(el("div", "idx", `${displayIdx}. x=${b.x_position?.toFixed?.(1) ?? "?"}`));
 
-    // Display line: raw or LC depending on row
     const mainText = titleMode === "raw" ? b.call_number : (b._lc || b.call_number);
     card.appendChild(el("div", "call", mainText));
 
@@ -312,6 +366,8 @@ function renderRow(container, books, wrongSet, titleMode) {
     const add = (k,v) => { kv.appendChild(el("div","k",k)); kv.appendChild(el("div","v",v)); };
     add("raw", b.call_number || "");
     add("lc", b._lc || "(not found)");
+    add("core", b._parsed?.core || "(not found)");
+    add("duplicate", isDup ? "yes" : "no");
     add("confidence", (b.confidence != null) ? String(b.confidence.toFixed ? b.confidence.toFixed(3) : b.confidence) : "(n/a)");
     add("x_position", (b.x_position != null) ? String(b.x_position.toFixed ? b.x_position.toFixed(2) : b.x_position) : "(n/a)");
     add("valid", b._parsed?.valid ? "true" : "false");
@@ -349,40 +405,67 @@ async function main() {
 
     return {
       ...b,
-      _key: String(b.position ?? i),     // stable ID for mismatch checks
+      _key: String(b.position ?? i),
+      _originalIndex: i + 1,
       _lc: ex.lc,
       _lc_error: ex.error,
-      _parsed: parsed
+      _parsed: parsed,
+      _isDuplicate: false
     };
   });
 
-  meta.textContent = `${data.image_file || "image"} • ${books.length} books`;
-
-  // Correct order: sort by parsed LC (invalids go last)
-  const correct = [...books].sort((A, B) => lcCompare(A._parsed, B._parsed));
-
-  // Find which books are out-of-place by comparing expected sequence
-  const wrongSet = new Set();
+  // Mark duplicates
   for (let i = 0; i < books.length; i++) {
-    if (books[i]._key !== correct[i]?._key) {
-      wrongSet.add(books[i]._key);
+    if (books[i]._isDuplicate) continue;
+    for (let j = i + 1; j < books.length; j++) {
+      if (areDuplicates(books[i]._parsed, books[j]._parsed)) {
+        books[j]._isDuplicate = true;
+      }
+    }
+  }
+
+  const uniqueBooks = books.filter(b => !b._isDuplicate);
+  const duplicateCount = books.length - uniqueBooks.length;
+
+  meta.textContent = `${data.image_file || "image"} • ${uniqueBooks.length} unique books` + 
+                     (duplicateCount > 0 ? ` • ${duplicateCount} duplicates removed` : "");
+
+  // Correct order: sort unique books only
+  const correct = [...uniqueBooks].sort((A, B) => lcCompare(A._parsed, B._parsed));
+
+  // Find which books are out-of-place
+  const wrongSet = new Set();
+  for (let i = 0; i < uniqueBooks.length; i++) {
+    if (uniqueBooks[i]._key !== correct[i]?._key) {
+      wrongSet.add(uniqueBooks[i]._key);
       if (correct[i]) wrongSet.add(correct[i]._key);
     }
   }
 
-  // Warn if some books couldn't be parsed into LC
-  const invalid = books.filter(b => !b._parsed?.valid);
-  if (invalid.length) {
+  // Show warning for duplicates
+  if (duplicateCount > 0) {
+    const dups = books.filter(b => b._isDuplicate);
     warnBox.style.display = "block";
-    const examples = invalid.slice(0, 4).map(b => `<li><code>${b.call_number}</code></li>`).join("");
+    const examples = dups.slice(0, 3).map(b => 
+      `<li><code>${b.call_number}</code> (core: ${b._parsed?.core || "?"})</li>`
+    ).join("");
     warnBox.innerHTML =
-      `<b>Warning:</b> ${invalid.length} book(s) did not match <code>CLASS + NUMBER</code> and will sort last.<br/>` +
-      `Examples:<ul>${examples}</ul>` +
-      `If these are department labels, make sure the LC class + number is present somewhere in the OCR output.`;
+      `<b>Info:</b> ${duplicateCount} duplicate(s) detected and hidden from correct order view.<br/>` +
+      `Duplicates shown as faded in "As scanned" row:<ul>${examples}</ul>`;
   }
 
-  renderRow(document.getElementById("rowCurrent"), books, wrongSet, "raw");
-  renderRow(document.getElementById("rowCorrect"), correct, wrongSet, "lc");
+  // Warn if some books couldn't be parsed
+  const invalid = uniqueBooks.filter(b => !b._parsed?.valid);
+  if (invalid.length) {
+    const examples = invalid.slice(0, 3).map(b => `<li><code>${b.call_number}</code></li>`).join("");
+    const msg = `<br/><b>Warning:</b> ${invalid.length} book(s) did not match <code>CLASS + NUMBER</code>.<br/>` +
+      `Examples:<ul>${examples}</ul>`;
+    warnBox.style.display = "block";
+    warnBox.innerHTML += msg;
+  }
+
+  renderRow(document.getElementById("rowCurrent"), books, wrongSet, "raw", true);
+  renderRow(document.getElementById("rowCorrect"), correct, wrongSet, "lc", false);
 }
 
 main();
