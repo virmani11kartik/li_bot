@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width-device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Libot Robot</title>
     <!-- TODO: decide font pref. google font-->
     <link rel="stylesheet" href="">
@@ -30,6 +30,7 @@
         body {
             font-family: Arial, Helvetica, sans-serif;
             background: var(--bg);
+            overflow: hidden;
         }
         .bg-pattern {
             position: fixed;
@@ -107,6 +108,11 @@
             pointer-events: auto;
         }
 
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
 
         /* Robot Face */
         .robot-face {
@@ -156,6 +162,17 @@
             animation: blink 4s infinite;
         }
 
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
         .status-text {
             margin-top: 60px;
