@@ -12,15 +12,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
 
     <style>
-        :root{
-            --primary: #021f31;
-            --bg: #e6e4e1;
-            --secondary: #bb7d5c;
+        :root {
+            --primary: #2D5F7E;
+            --secondary: #F7A072;
+            --accent: #E8C468;
+            --bg: #FFF8F0;
             --text-dark: #2A2A2A;
             --text-light: #FFFFFF;
             --shadow: rgba(45, 95, 126, 0.15);
             --success: #4CAF50;
-            --warning: #db8e19;
+            --warning: #FF9800;
         }
         * {
             margin: 0;
@@ -40,7 +41,10 @@
             width: 100%;
             height: 100%;
             opacity: 0.03;
-            /* background-image:  */
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 35px, var(--primary) 35px, var(--primary) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, var(--primary) 35px, var(--primary) 70px);
+            pointer-events: none;
         }
         .container{
             width: 100vw;
@@ -118,49 +122,171 @@
         /* Robot Face */
         .robot-face {
             position: relative;
-            width: 400px;
-            height: 400px;
+            width: 450px;
+            height: 500px;
             animation: float 4s ease-in-out infinite;
+        }
+
+        .face-circle {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(145deg, #3D7FA0, var(--primary));
+            border-radius: 60px;
+            box-shadow: 
+                0 20px 60px var(--shadow),
+                inset 0 -10px 30px rgba(0,0,0,0.2),
+                inset 0 2px 0 rgba(255,255,255,0.1);
+            position: relative;
+            border: 8px solid #2A4A5E;
+        }
+
+        /* Robot antennas */
+        .antenna {
+            position: absolute;
+            width: 6px;
+            height: 60px;
+            background: linear-gradient(180deg, #2A4A5E, var(--primary));
+            top: -60px;
+            border-radius: 3px;
+        }
+
+        .antenna::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, var(--accent), var(--secondary));
+            border-radius: 50%;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 
+                0 0 20px var(--accent),
+                0 0 10px var(--secondary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+            50% { opacity: 0.6; transform: translateX(-50%) scale(1.2); }
+        }
+
+        .antenna-left { left: 100px; }
+        .antenna-right { right: 100px; }
+
+        /* LED Screen/Visor for eyes */
+        .eye-panel {
+            position: absolute;
+            width: 320px;
+            height: 100px;
+            background: linear-gradient(180deg, #1a1a1a, #0a0a0a);
+            border-radius: 15px;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid #2A4A5E;
+            box-shadow: 
+                inset 0 2px 10px rgba(0,0,0,0.8),
+                0 4px 15px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .eye-panel::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(77, 208, 225, 0.3), transparent);
+            top: 50%;
+            animation: scan 3s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-50px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(50px); opacity: 0; }
         }
 
 
         .eye {
             position: absolute;
-            width: 80px;
-            height: 80px;
-            background: var(--text-light);
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, #4DD0E1, #00BCD4);
             border-radius: 50%;
-            top: 120px;
-            box-shadow: inset 0 5px 15px rgba(0,0,0,0.1);
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 
+                0 0 30px #4DD0E1,
+                0 0 15px #00BCD4,
+                inset 0 -5px 10px rgba(0,0,0,0.3);
+            animation: blink 4s infinite;
         }
 
         .eye-left { left: 80px; }
-        .eye-right { right: 80px; }
+        .eye-right { right: 30px; }
 
 
         .mouth {
             position: absolute;
-            width: 140px;
-            height: 70px;
-            border: 8px solid var(--text-light);
-            border-top: none;
-            border-radius: 0 0 140px 140px;
-            bottom: 80px;
+            width: 200px;
+            height: 8px;
+            background: linear-gradient(90deg, 
+                var(--primary) 0%, 
+                var(--secondary) 25%, 
+                var(--accent) 50%, 
+                var(--secondary) 75%, 
+                var(--primary) 100%);
+            bottom: 100px;
             left: 50%;
             transform: translateX(-50%);
-            box-shadow: inset 0 -10px 20px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            box-shadow: 
+                0 0 20px var(--secondary),
+                inset 0 1px 2px rgba(255,255,255,0.3);
+            overflow: hidden;
         }
+
+        .mouth::before {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+            animation: mouthGlow 2s linear infinite;
+        }
+
+        @keyframes mouthGlow {
+            0% { left: -40px; }
+            100% { left: 200px; }
+        }
+
+
+        .mouth-segment {
+            position: absolute;
+            width: 8px;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            top: 0;
+        }
+
+        .mouth-segment:nth-child(1) { left: 30px; }
+        .mouth-segment:nth-child(2) { left: 70px; }
+        .mouth-segment:nth-child(3) { left: 110px; }
+        .mouth-segment:nth-child(4) { left: 150px; }
 
         .pupil {
             position: absolute;
-            width: 35px;
-            height: 35px;
-            background: var(--text-dark);
+            width: 25px;
+            height: 25px;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #000000);
             border-radius: 50%;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            animation: blink 4s infinite;
+            box-shadow: 
+                0 0 10px rgba(255,255,255,0.5),
+                inset 0 -3px 5px rgba(0,0,0,0.5);
         }
 
         @keyframes blink {
@@ -190,15 +316,80 @@
         }
         .face-circle {
             width: 100%;
-            height: 100%;
+            height: 400px;
             background: linear-gradient(135deg, var(--primary), #3D7FA0);
-            border-radius: 50%;
+            border-radius: 60px;
             box-shadow: 
                 0 20px 60px var(--shadow),
-                inset 0 -10px 30px rgba(0,0,0,0.1);
+                inset 0 -10px 30px rgba(0,0,0,0.2),
+                inset 0 2px 0 rgba(255,255,255,0.1);
             position: relative;
+            border: 8px solid #2A4A5E;
+        }
+        .panel-line {
+            position: absolute;
+            width: 90%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            left: 5%;
         }
 
+        .panel-line-1 { top: 60px; }
+        .panel-line-2 { bottom: 60px; }
+
+        /* Side panels */
+        .side-panel {
+            position: absolute;
+            width: 30px;
+            height: 120px;
+            background: linear-gradient(145deg, #2A4A5E, #1a3a4a);
+            top: 140px;
+            border-radius: 8px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .side-panel::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .side-panel-left { left: -20px; }
+        .side-panel-right { right: -20px; }
+
+        /* Bolts/screws decoration */
+        .bolt {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: radial-gradient(circle, #4a5568, #2d3748);
+            border-radius: 50%;
+            border: 2px solid #1a202c;
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.2);
+        }
+
+        .bolt::before {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 2px;
+            background: #1a202c;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .bolt-tl { top: 20px; left: 20px; }
+        .bolt-tr { top: 20px; right: 20px; }
+        .bolt-bl { bottom: 20px; left: 20px; }
+        .bolt-br { bottom: 20px; right: 20px; }
 
         /* Welcome Screen */
         .welcome-content {
@@ -448,13 +639,41 @@
         <div class="screen active" id="defaultScreen">
             <div class="robot-face">
                 <div class="face-circle">
-                    <div class="eye eye-left">
-                        <div class="pupil"></div>
+                    <!-- Antennas -->
+                    <div class="antenna antenna-left"></div>
+                    <div class="antenna antenna-right"></div>
+                    
+                    <!-- Panel lines -->
+                    <div class="panel-line panel-line-1"></div>
+                    <div class="panel-line panel-line-2"></div>
+                    
+                    <!-- Side panels with LED indicators -->
+                    <div class="side-panel side-panel-left"></div>
+                    <div class="side-panel side-panel-right"></div>
+                    
+                    <!-- LED Eye panel/visor -->
+                    <div class="eye-panel">
+                        <div class="eye eye-left">
+                            <div class="pupil"></div>
+                        </div>
+                        <div class="eye eye-right">
+                            <div class="pupil"></div>
+                        </div>
                     </div>
-                    <div class="eye eye-right">
-                        <div class="pupil"></div>
+                    
+                    <!-- LED bar mouth -->
+                    <div class="mouth">
+                        <div class="mouth-segment"></div>
+                        <div class="mouth-segment"></div>
+                        <div class="mouth-segment"></div>
+                        <div class="mouth-segment"></div>
                     </div>
-                    <div class="mouth"></div>
+                    
+                    <!-- Decorative bolts -->
+                    <div class="bolt bolt-tl"></div>
+                    <div class="bolt bolt-tr"></div>
+                    <div class="bolt bolt-bl"></div>
+                    <div class="bolt bolt-br"></div>
                 </div>
             </div>
             <div class="status-text">Waiting to help you...</div>
