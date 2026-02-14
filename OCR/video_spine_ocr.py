@@ -90,6 +90,7 @@ def fix_common_ocr_errors(text):
         'FNGR': 'ENGR',
         'DNOIR': 'ENGR',
         'PHVS': 'PHYS',
+        '@': 'Q',
     }
     
     # Apply direct replacements
