@@ -11,6 +11,7 @@ from difflib import SequenceMatcher
 # Configuration
 # ----------------------------
 VIDEO_PATH = "shelf_video_2.MOV"  # "0" or 0 for webcam
+VIDEO_PATH = "0"  # "0" or 0 for webcam
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON = os.path.join(BASE_DIR, "shelf_viewer", "shelf_order.json")
 UPDATE_INTERVAL = 1.0  # seconds
