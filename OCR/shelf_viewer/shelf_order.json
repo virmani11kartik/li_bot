@@ -3,18 +3,6 @@
   "num_books": 4,
   "books": [
     {
-      "call_number": "@C 174.12 H39 2001",
-      "confidence": 0.8722024277454565,
-      "text_components": [
-        "QC",
-        "174.12",
-        "H39",
-        "2001"
-      ],
-      "detection_count": 12,
-      "position": 1
-    },
-    {
       "call_number": "Q 325.5 M873 2023",
       "confidence": 0.8834144712115525,
       "text_components": [
@@ -23,6 +11,18 @@
         "2023"
       ],
       "detection_count": 18,
+      "position": 1
+    },
+    {
+      "call_number": "QC 174.12 H39 2001",
+      "confidence": 0.8722024277454565,
+      "text_components": [
+        "QC",
+        "174.12",
+        "H39",
+        "2001"
+      ],
+      "detection_count": 12,
       "position": 2
     },
     {
